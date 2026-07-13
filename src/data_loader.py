@@ -14,6 +14,8 @@ COLUMN_NAMES = [
     "nan_2",
 ]
 
+SENSOR_COLUMNS = [f"sensor_{i}" for i in range(1, 22)]
+
 
 def load_cmapss_file(file_path):
     """
@@ -74,6 +76,30 @@ def add_anomaly_label(df, anomaly_ratio=0.30):
     return df
 
 
+def normalize_sensors(df):
+    """
+    Normalize sensor columns using min-max scaling.
+
+    Formula:
+    x_scaled = (x - min) / (max - min)
+
+    For now, we use training data only.
+    Later, the same min/max values will be reused for test data.
+    """
+
+    df = df.copy()
+
+    sensor_min = df[SENSOR_COLUMNS].min()
+    sensor_max = df[SENSOR_COLUMNS].max()
+
+    denominator = sensor_max - sensor_min
+    denominator = denominator.replace(0, 1)
+
+    df[SENSOR_COLUMNS] = (df[SENSOR_COLUMNS] - sensor_min) / denominator
+
+    return df
+
+
 def load_train_data(raw_data_dir="data/raw"):
     """
     Load training data and prepare basic columns:
@@ -87,8 +113,10 @@ def load_train_data(raw_data_dir="data/raw"):
     train_df = load_cmapss_file(train_path)
     train_df = add_rul(train_df)
     train_df = add_anomaly_label(train_df)
+    train_df = normalize_sensors(train_df)
 
     return train_df
+
 
 
 if __name__ == "__main__":
@@ -101,3 +129,6 @@ if __name__ == "__main__":
     print()
     print("Label distribution:")
     print(train_df["label"].value_counts())
+    print()
+    print("Sensor value range after normalization:")
+    print(train_df[SENSOR_COLUMNS].min().min(), train_df[SENSOR_COLUMNS].max().max())

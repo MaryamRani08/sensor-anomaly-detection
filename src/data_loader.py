@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pandas as pd
+import numpy as np
 
 
 COLUMN_NAMES = [
@@ -100,6 +101,44 @@ def normalize_sensors(df):
     return df
 
 
+
+def create_sliding_windows(df, window_size=30, step=1):
+    """
+    Create sliding windows from sensor data.
+
+    Each window contains 30 cycles of sensor readings.
+    Windows are created separately for each engine, so data from different
+    engines is never mixed.
+
+    The label of a window is the label of its last cycle.
+    """
+
+    X_windows = []
+    y_windows = []
+
+    for engine_id, engine_df in df.groupby("engine_id"):
+        engine_df = engine_df.sort_values("cycle").reset_index(drop=True)
+
+        sensor_values = engine_df[SENSOR_COLUMNS].values
+        labels = engine_df["label"].values
+
+        for start_idx in range(0, len(engine_df) - window_size + 1, step):
+            end_idx = start_idx + window_size
+
+            window = sensor_values[start_idx:end_idx]
+            window_label = labels[end_idx - 1]
+
+            X_windows.append(window)
+            y_windows.append(window_label)
+
+    X = np.array(X_windows, dtype=np.float32)
+    y = np.array(y_windows, dtype=np.int64)
+
+    return X, y
+
+
+
+
 def load_train_data(raw_data_dir="data/raw"):
     """
     Load training data and prepare basic columns:
@@ -132,3 +171,16 @@ if __name__ == "__main__":
     print()
     print("Sensor value range after normalization:")
     print(train_df[SENSOR_COLUMNS].min().min(), train_df[SENSOR_COLUMNS].max().max())
+
+    X_train_windows, y_train_windows = create_sliding_windows(
+        train_df,
+        window_size=30,
+        step=1
+    )
+
+    print()
+    print("Sliding windows created successfully")
+    print("X_train_windows shape:", X_train_windows.shape)
+    print("y_train_windows shape:", y_train_windows.shape)
+    print("Window label distribution:")
+    print(pd.Series(y_train_windows).value_counts())

@@ -137,6 +137,22 @@ def create_sliding_windows(df, window_size=30, step=1):
     return X, y
 
 
+def get_healthy_windows(X, y):
+    """
+    Keep only healthy windows for autoencoder training.
+
+    label 0 = healthy
+    label 1 = anomaly
+    """
+
+    healthy_mask = y == 0
+
+    X_healthy = X[healthy_mask]
+    y_healthy = y[healthy_mask]
+
+    return X_healthy, y_healthy                     
+
+
 
 
 def load_train_data(raw_data_dir="data/raw"):
@@ -177,6 +193,18 @@ if __name__ == "__main__":
         window_size=30,
         step=1
     )
+
+    X_train_healthy, y_train_healthy = get_healthy_windows(
+    X_train_windows,
+    y_train_windows
+    )
+
+    print()
+    print("Healthy training windows prepared successfully")
+    print("X_train_healthy shape:", X_train_healthy.shape)
+    print("y_train_healthy shape:", y_train_healthy.shape)
+    print("Healthy labels:")
+    print(pd.Series(y_train_healthy).value_counts())
 
     print()
     print("Sliding windows created successfully")

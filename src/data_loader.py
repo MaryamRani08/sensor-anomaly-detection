@@ -60,6 +60,39 @@ def add_rul(df):
     return df
 
 
+def add_test_rul(test_df, rul_file_path):
+    """
+    Add RUL for test data using RUL_FD001.txt.
+
+    Test engines do not run until failure.
+    RUL_FD001.txt gives the remaining cycles after the last observed cycle.
+    """
+
+    test_df = test_df.copy()
+
+    rul_df = pd.read_csv(
+        rul_file_path,
+        sep=r"\s+",
+        header=None,
+        names=["final_RUL"]
+    )
+
+    rul_df["engine_id"] = range(1, len(rul_df) + 1)
+
+    max_observed_cycle = test_df.groupby("engine_id")["cycle"].max().reset_index()
+    max_observed_cycle = max_observed_cycle.rename(columns={"cycle": "last_observed_cycle"})
+
+    test_df = test_df.merge(max_observed_cycle, on="engine_id", how="left")
+    test_df = test_df.merge(rul_df, on="engine_id", how="left")
+
+    test_df["max_cycle"] = test_df["last_observed_cycle"] + test_df["final_RUL"]
+    test_df["RUL"] = test_df["max_cycle"] - test_df["cycle"]
+
+    test_df = test_df.drop(columns=["last_observed_cycle", "final_RUL"])
+
+    return test_df
+
+
 def add_anomaly_label(df, anomaly_ratio=0.30):
     """
     Label last 30 percent of each engine life as anomaly.
@@ -173,6 +206,23 @@ def load_train_data(raw_data_dir="data/raw"):
     return train_df
 
 
+def load_test_data(raw_data_dir="data/raw"):
+    """
+    Load test data and prepare RUL and anomaly labels.
+    """
+
+    raw_data_dir = Path(raw_data_dir)
+
+    test_path = raw_data_dir / "test_FD001.txt"
+    rul_path = raw_data_dir / "RUL_FD001.txt"
+
+    test_df = load_cmapss_file(test_path)
+    test_df = add_test_rul(test_df, rul_path)
+    test_df = add_anomaly_label(test_df)
+
+    return test_df
+
+
 
 if __name__ == "__main__":
     train_df = load_train_data()
@@ -212,3 +262,13 @@ if __name__ == "__main__":
     print("y_train_windows shape:", y_train_windows.shape)
     print("Window label distribution:")
     print(pd.Series(y_train_windows).value_counts())
+
+    test_df = load_test_data()
+
+    print()
+    print("Test data loaded successfully")
+    print("Test shape:", test_df.shape)
+    print(test_df.head())
+    print()
+    print("Test label distribution:")
+    print(test_df["label"].value_counts())

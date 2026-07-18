@@ -110,21 +110,51 @@ def add_anomaly_label(df, anomaly_ratio=0.30):
     return df
 
 
-def normalize_sensors(df):
+# def normalize_sensors(df):
+#     """
+#     Normalize sensor columns using min-max scaling.
+
+#     Formula:
+#     x_scaled = (x - min) / (max - min)
+
+#     For now, we use training data only.
+#     Later, the same min/max values will be reused for test data.
+#     """
+
+#     df = df.copy()
+
+#     sensor_min = df[SENSOR_COLUMNS].min()
+#     sensor_max = df[SENSOR_COLUMNS].max()
+
+#     denominator = sensor_max - sensor_min
+#     denominator = denominator.replace(0, 1)
+
+#     df[SENSOR_COLUMNS] = (df[SENSOR_COLUMNS] - sensor_min) / denominator
+
+#     return df
+
+
+def fit_sensor_scaler(train_df):
     """
-    Normalize sensor columns using min-max scaling.
+    Compute min and max values from training data only.
 
-    Formula:
-    x_scaled = (x - min) / (max - min)
+    These values will later be used to normalize both training and test data.
+    """
 
-    For now, we use training data only.
-    Later, the same min/max values will be reused for test data.
+    sensor_min = train_df[SENSOR_COLUMNS].min()
+    sensor_max = train_df[SENSOR_COLUMNS].max()
+
+    return sensor_min, sensor_max
+
+
+def apply_sensor_scaler(df, sensor_min, sensor_max):
+    """
+    Apply min-max normalization using training data statistics.
+
+    This avoids data leakage from the test set.
     """
 
     df = df.copy()
-
-    sensor_min = df[SENSOR_COLUMNS].min()
-    sensor_max = df[SENSOR_COLUMNS].max()
 
     denominator = sensor_max - sensor_min
     denominator = denominator.replace(0, 1)
@@ -201,7 +231,7 @@ def load_train_data(raw_data_dir="data/raw"):
     train_df = load_cmapss_file(train_path)
     train_df = add_rul(train_df)
     train_df = add_anomaly_label(train_df)
-    train_df = normalize_sensors(train_df)
+    # train_df = normalize_sensors(train_df)
 
     return train_df
 
@@ -223,20 +253,48 @@ def load_test_data(raw_data_dir="data/raw"):
     return test_df
 
 
+def load_train_test_data(raw_data_dir="data/raw"):
+    """
+    Load train and test data.
+
+    Normalization is fitted only on training data,
+    then applied to both train and test data.
+    """
+
+    train_df = load_train_data(raw_data_dir)
+    test_df = load_test_data(raw_data_dir)
+
+    sensor_min, sensor_max = fit_sensor_scaler(train_df)
+
+    train_df = apply_sensor_scaler(train_df, sensor_min, sensor_max)
+    test_df = apply_sensor_scaler(test_df, sensor_min, sensor_max)
+
+    return train_df, test_df
+
+
 
 if __name__ == "__main__":
-    train_df = load_train_data()
+    train_df, test_df = load_train_test_data()
 
-    print("Training data loaded successfully")
-    print("Shape:", train_df.shape)
+    print("Train and test data loaded successfully")
+    print("Train shape:", train_df.shape)
+    print("Test shape:", test_df.shape)
+
     print()
-    print(train_df.head())
-    print()
-    print("Label distribution:")
+    print("Train label distribution:")
     print(train_df["label"].value_counts())
+
     print()
-    print("Sensor value range after normalization:")
+    print("Test label distribution:")
+    print(test_df["label"].value_counts())
+
+    print()
+    print("Train sensor range after normalization:")
     print(train_df[SENSOR_COLUMNS].min().min(), train_df[SENSOR_COLUMNS].max().max())
+
+    print()
+    print("Test sensor range using train scaler:")
+    print(test_df[SENSOR_COLUMNS].min().min(), test_df[SENSOR_COLUMNS].max().max())
 
     X_train_windows, y_train_windows = create_sliding_windows(
         train_df,
@@ -245,16 +303,9 @@ if __name__ == "__main__":
     )
 
     X_train_healthy, y_train_healthy = get_healthy_windows(
-    X_train_windows,
-    y_train_windows
+        X_train_windows,
+        y_train_windows
     )
-
-    print()
-    print("Healthy training windows prepared successfully")
-    print("X_train_healthy shape:", X_train_healthy.shape)
-    print("y_train_healthy shape:", y_train_healthy.shape)
-    print("Healthy labels:")
-    print(pd.Series(y_train_healthy).value_counts())
 
     print()
     print("Sliding windows created successfully")
@@ -263,12 +314,9 @@ if __name__ == "__main__":
     print("Window label distribution:")
     print(pd.Series(y_train_windows).value_counts())
 
-    test_df = load_test_data()
-
     print()
-    print("Test data loaded successfully")
-    print("Test shape:", test_df.shape)
-    print(test_df.head())
-    print()
-    print("Test label distribution:")
-    print(test_df["label"].value_counts())
+    print("Healthy training windows prepared successfully")
+    print("X_train_healthy shape:", X_train_healthy.shape)
+    print("y_train_healthy shape:", y_train_healthy.shape)
+    print("Healthy labels:")
+    print(pd.Series(y_train_healthy).value_counts())

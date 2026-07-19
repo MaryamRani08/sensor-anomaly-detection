@@ -273,50 +273,54 @@ def load_train_test_data(raw_data_dir="data/raw"):
 
 
 
-if __name__ == "__main__":
-    train_df, test_df = load_train_test_data()
+def prepare_window_data(raw_data_dir="data/raw", window_size=30, step=1):
+    """
+    Prepare final window-based datasets for anomaly detection.
 
-    print("Train and test data loaded successfully")
-    print("Train shape:", train_df.shape)
-    print("Test shape:", test_df.shape)
+    X_train:
+        Healthy training windows only.
 
-    print()
-    print("Train label distribution:")
-    print(train_df["label"].value_counts())
+    X_test:
+        All test windows.
 
-    print()
-    print("Test label distribution:")
-    print(test_df["label"].value_counts())
+    y_test:
+        Labels for test windows.
+    """
 
-    print()
-    print("Train sensor range after normalization:")
-    print(train_df[SENSOR_COLUMNS].min().min(), train_df[SENSOR_COLUMNS].max().max())
-
-    print()
-    print("Test sensor range using train scaler:")
-    print(test_df[SENSOR_COLUMNS].min().min(), test_df[SENSOR_COLUMNS].max().max())
+    train_df, test_df = load_train_test_data(raw_data_dir)
 
     X_train_windows, y_train_windows = create_sliding_windows(
         train_df,
-        window_size=30,
-        step=1
+        window_size=window_size,
+        step=step
     )
 
-    X_train_healthy, y_train_healthy = get_healthy_windows(
+    X_train, _ = get_healthy_windows(
         X_train_windows,
         y_train_windows
     )
 
-    print()
-    print("Sliding windows created successfully")
-    print("X_train_windows shape:", X_train_windows.shape)
-    print("y_train_windows shape:", y_train_windows.shape)
-    print("Window label distribution:")
-    print(pd.Series(y_train_windows).value_counts())
+    X_test, y_test = create_sliding_windows(
+        test_df,
+        window_size=window_size,
+        step=step
+    )
+
+    return X_train, X_test, y_test
+
+
+if __name__ == "__main__":
+    X_train, X_test, y_test = prepare_window_data(
+        raw_data_dir="data/raw",
+        window_size=30,
+        step=1
+    )
+
+    print("Final window data prepared successfully")
+    print("X_train shape:", X_train.shape)
+    print("X_test shape:", X_test.shape)
+    print("y_test shape:", y_test.shape)
 
     print()
-    print("Healthy training windows prepared successfully")
-    print("X_train_healthy shape:", X_train_healthy.shape)
-    print("y_train_healthy shape:", y_train_healthy.shape)
-    print("Healthy labels:")
-    print(pd.Series(y_train_healthy).value_counts())
+    print("Test label distribution:")
+    print(pd.Series(y_test).value_counts())

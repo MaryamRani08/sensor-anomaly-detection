@@ -2,6 +2,8 @@ from pathlib import Path
 
 import pandas as pd
 import numpy as np
+import torch
+from torch.utils.data import Dataset, DataLoader
 
 
 COLUMN_NAMES = [
@@ -16,6 +18,35 @@ COLUMN_NAMES = [
 ]
 
 SENSOR_COLUMNS = [f"sensor_{i}" for i in range(1, 22)]
+
+
+class SensorWindowDataset(Dataset):
+    """
+    PyTorch Dataset for sensor sliding windows.
+
+    For training:
+        returns only X because autoencoder does not need labels.
+
+    For testing:
+        returns X and y because we need labels for evaluation.
+    """
+
+    def __init__(self, X, y=None):
+        self.X = torch.tensor(X, dtype=torch.float32)
+
+        if y is None:
+            self.y = None
+        else:
+            self.y = torch.tensor(y, dtype=torch.long)
+
+    def __len__(self):
+        return len(self.X)
+
+    def __getitem__(self, index):
+        if self.y is None:
+            return self.X[index]
+
+        return self.X[index], self.y[index]
 
 
 def load_cmapss_file(file_path):
@@ -309,18 +340,62 @@ def prepare_window_data(raw_data_dir="data/raw", window_size=30, step=1):
     return X_train, X_test, y_test
 
 
-if __name__ == "__main__":
+def create_dataloaders(
+    raw_data_dir="data/raw",
+    window_size=30,
+    step=1,
+    batch_size=64
+):
+    """
+    Create PyTorch DataLoaders for model training and evaluation.
+
+    train_loader:
+        Contains only healthy training windows.
+
+    test_loader:
+        Contains all test windows and their labels.
+    """
+
     X_train, X_test, y_test = prepare_window_data(
-        raw_data_dir="data/raw",
-        window_size=30,
-        step=1
+        raw_data_dir=raw_data_dir,
+        window_size=window_size,
+        step=step
     )
 
-    print("Final window data prepared successfully")
-    print("X_train shape:", X_train.shape)
-    print("X_test shape:", X_test.shape)
-    print("y_test shape:", y_test.shape)
+    train_dataset = SensorWindowDataset(X_train)
+    test_dataset = SensorWindowDataset(X_test, y_test)
+
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=True
+    )
+
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=batch_size,
+        shuffle=False
+    )
+
+    return train_loader, test_loader
+
+
+if __name__ == "__main__":
+    train_loader, test_loader = create_dataloaders(
+        raw_data_dir="data/raw",
+        window_size=30,
+        step=1,
+        batch_size=64
+    )
+
+    print("PyTorch DataLoaders created successfully")
+
+    train_batch = next(iter(train_loader))
+    test_batch_X, test_batch_y = next(iter(test_loader))
 
     print()
-    print("Test label distribution:")
-    print(pd.Series(y_test).value_counts())
+    print("Train batch shape:", train_batch.shape)
+
+    print()
+    print("Test batch X shape:", test_batch_X.shape)
+    print("Test batch y shape:", test_batch_y.shape)
